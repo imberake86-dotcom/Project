@@ -1,0 +1,29 @@
+name: morning-scan
+
+on:
+  push:
+    branches: [claude/morning-picks-l4bdhj]
+    paths: [screener/morning_scan.py, .github/workflows/morning-scan.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install finance-datareader pandas numpy requests
+      - run: python screener/morning_scan.py
+      - name: commit result
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add reports/morning
+          git commit -m "morning scan: $(date -u +%F)" || exit 0
+          git pull --rebase
+          git push
