@@ -52,6 +52,15 @@ def main():
                                  "level": round(g(t, col)), "vol_x": vol_x, "note": note})
     out = ROOT / "reports"
     out.mkdir(parents=True, exist_ok=True)
+    # 오늘 처음 충족된 조건만 골라 푸시 알림용으로 따로 남긴다 (커밋하지 않음)
+    seen = set()
+    prev = out / "alerts.json"
+    if prev.exists():
+        old = json.loads(prev.read_text())
+        if old.get("date") == date:
+            seen = {(x["name"], x["rule"]) for x in old["triggers"]}
+    new = [x for x in triggers if (x["name"], x["rule"]) not in seen]
+    (out / "new_alerts.json").write_text(json.dumps(new, ensure_ascii=False))
     (out / "alerts.json").write_text(json.dumps({"date": date, "triggers": triggers}, ensure_ascii=False, indent=1))
     print(json.dumps({"date": date, "triggers": triggers, "levels": levels}, ensure_ascii=False, indent=1))
 

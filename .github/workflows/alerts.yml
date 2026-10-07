@@ -5,11 +5,12 @@ on:
     branches: [claude/project-thread-13a1xl]
     paths: [screener/alerts.py, .github/workflows/alerts.yml]
   schedule:
-    - cron: "*/30 0-6 * * 1-5"   # 09:00~15:30 KST, 30분 간격
+    - cron: "7,37 0-6 * * 1-5"   # 09:07~15:37 KST, 30분 간격 (정각 혼잡 회피)
   workflow_dispatch:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: reports
@@ -25,6 +26,15 @@ jobs:
           python-version: "3.12"
       - run: pip install finance-datareader pandas numpy requests
       - run: python screener/alerts.py
+      - name: push new alerts as GitHub issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq -c '.[]' reports/new_alerts.json | while read -r a; do
+            title="[타점] $(jq -r '.name + " " + .rule' <<<"$a")"
+            body=$(jq -r '"현재가 \(.price) / 기준선 \(.level) / 거래량 20일평균 \(.vol_x)배\n\(.note)\n\n장중 신호는 종가 확정 전입니다. 종가까지 기준선 위에서 버티는지 확인하세요."' <<<"$a")
+            gh issue create --title "$title" --body "$body" --assignee "${{ github.repository_owner }}" || echo "issue create failed: $title"
+          done
       - name: commit alerts
         run: |
           git config user.name github-actions
