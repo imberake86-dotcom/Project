@@ -1,11 +1,11 @@
-name: dante-screener
+name: dante-alerts
 
 on:
   push:
     branches: [claude/project-thread-13a1xl]
-    paths: [screener/**, .github/workflows/dante.yml]
+    paths: [screener/alerts.py, .github/workflows/alerts.yml]
   schedule:
-    - cron: "20 9 * * 1-5"   # 18:20 KST, 시간외 거래까지 끝난 뒤 확정 일봉으로
+    - cron: "*/30 0-6 * * 1-5"   # 09:00~15:30 KST, 30분 간격
   workflow_dispatch:
 
 permissions:
@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  screen:
+  alerts:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,12 +24,12 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install finance-datareader pandas numpy requests
-      - run: python screener/dante.py
-      - name: commit report
+      - run: python screener/alerts.py
+      - name: commit alerts
         run: |
           git config user.name github-actions
           git config user.email github-actions@users.noreply.github.com
-          git add reports
-          git commit -m "report: $(date -u +%F)" || exit 0
+          git add reports/alerts.json
+          git commit -m "alerts: $(TZ=Asia/Seoul date +'%F %H:%M')" || exit 0
           git pull --rebase
           git push

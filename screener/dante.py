@@ -9,6 +9,7 @@ docs/dante_technique.md 의 기법(밥그릇, 256, 112·224, 지분, 역매공�
 import json
 import sys
 from datetime import date, timedelta
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -20,11 +21,16 @@ RECENT = 3  # 돌파를 '오늘의 타점'으로 볼 기간(거래일)
 ROOT = Path(__file__).resolve().parent.parent
 
 
+@lru_cache(maxsize=1)
+def krx_listing():
+    import FinanceDataReader as fdr
+    return fdr.StockListing("KRX")
+
+
 def find_code(name):
     """종목명 → 6자리 코드. KRX 상장목록, 실패하면 네이버 자동완성."""
     try:
-        import FinanceDataReader as fdr
-        df = fdr.StockListing("KRX")
+        df = krx_listing()
         hit = df.loc[df["Name"] == name, "Code"]
         if len(hit):
             return hit.iloc[0]
