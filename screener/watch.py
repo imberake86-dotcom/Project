@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from alerts import RULES
+from alerts import RULES, level
 from dante import MAS, ROOT, find_code, load_prices
 
 KST = timezone(timedelta(hours=9))
@@ -169,7 +169,7 @@ def main():
                 if (name, rule) in seen:
                     continue
                 hit = {"date": date, "time": f"{now():%H:%M}", "name": name, "code": base["code"], "rule": rule,
-                       "price": q["price"], "level": round(t[col]), "vol_x": round(q["volume"] / base["vma20"], 1),
+                       "price": q["price"], "level": level(t, col), "vol_x": round(q["volume"] / base["vma20"], 1),
                        "note": note}
                 print("HIT", json.dumps(hit, ensure_ascii=False))
                 if not notify(hit):
