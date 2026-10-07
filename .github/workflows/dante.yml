@@ -5,7 +5,7 @@ on:
     branches: [claude/project-thread-13a1xl]
     paths: [screener/**, .github/workflows/dante.yml]
   schedule:
-    - cron: "20 9 * * 1-5"   # 18:20 KST, 시간외 거래까지 끝난 뒤 확정 일봉으로
+    - cron: "20 11 * * 1-5"  # 20:20 KST, 넥스트레이드 애프터마켓(~20:00)까지 끝난 뒤 일봉으로
   workflow_dispatch:
 
 permissions:
