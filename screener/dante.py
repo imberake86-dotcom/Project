@@ -99,9 +99,11 @@ def analyze(df):
         s["256"] = {
             "signal": brk60 and close > t["MA20"] and vol_ratio >= 1.5,
             "zone": in_zone,
-            "detail": f"5/20 골든크로스(20일 내) {'있음' if gc520 else '없음'} / "
-                      f"{'256 자리(20선 지지·60선 저항)' if in_zone else ''}"
-                      f"{' 60선 돌파' if brk60 else ''} / 60선 대비 {r['gap60']:+.1f}%",
+            "detail": " / ".join(x for x in [
+                f"5/20 골든크로스(20일 내) {'있음' if gc520 else '없음'}",
+                "256 자리(20선 지지·60선 저항)" if in_zone else "",
+                f"{RECENT}일 내 60선 돌파" if brk60 else "",
+                f"60선 대비 {r['gap60']:+.1f}%"] if x),
         }
 
     # 2-b. 112·224: 112선 위에서 지지 → 224선 공격
@@ -155,6 +157,13 @@ def analyze(df):
         if "zone" in s[k]:
             s[k]["zone"] = bool(s[k]["zone"])
     r["setups"] = s
+    tail = df.iloc[-10:]
+    r["recent"] = [
+        {"date": str(i.date()), "close": float(b["Close"]), "chg": round(float(pct(b["Close"], df["Close"].shift(1)[i])), 1),
+         "vol_x": round(float(b["Volume"] / b["VMA20"]), 1),
+         "above": [m for m in (5, 20, 60, 112, 224) if b["Close"] > b[f"MA{m}"]]}
+        for i, b in tail.iterrows()
+    ]
     # 추세전환 타점: 중장기 돌파 신호, 또는 256 자리에서의 오돌이
     major = [k for k in ("밥그릇", "256", "112·224", "지분", "역매공파") if s.get(k, {}).get("signal")]
     if s["오돌이"]["signal"] and s.get("256", {}).get("zone"):
@@ -206,6 +215,8 @@ def main(names):
         for k, v in r["setups"].items():
             mark = "🟢" if v["signal"] else ("🟡" if v.get("zone") else "⚪")
             lines.append(f"- {mark} {k}: {v['detail']}")
+        lines.append("- 최근 5일: " + ", ".join(
+            f"{b['date'][5:]} {b['chg']:+.1f}% 거래량{b['vol_x']}배" for b in r["recent"][-5:]))
         lines.append("")
     (out / "latest.md").write_text("\n".join(lines))
     print("\n".join(lines))
