@@ -5,7 +5,7 @@ on:
     branches: [claude/project-thread-13a1xl]
     paths: [screener/**, .github/workflows/dante.yml]
   schedule:
-    - cron: "40 6 * * 1-5"   # 15:40 KST, 장 마감 직후
+    - cron: "20 9 * * 1-5"   # 18:20 KST, 시간외 거래까지 끝난 뒤 확정 일봉으로
   workflow_dispatch:
 
 permissions:
