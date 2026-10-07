@@ -5,9 +5,9 @@ on:
     branches: [claude/project-thread-13a1xl]
     paths: [screener/watch.py, screener/alerts.py, .github/workflows/alerts.yml]
   schedule:
-    - cron: "50 23 * * 0-4"   # 08:50 KST 월~금, 오전 감시 (12:10까지)
-    - cron: "5 3 * * 1-5"     # 12:05 KST, 오후 감시 (오전 감시가 끝나면 이어서 15:31까지)
-  workflow_dispatch:
+    - cron: "45 23 * * 0-4"   # 08:45 KST 월~금 시작, 09:00~11:59 감시
+    - cron: "45 2 * * 1-5"    # 11:45 KST 시작, 12:00~15:40 감시 (종가 확정까지)
+  workflow_dispatch:          # 수동 실행·push 는 시세를 한 번만 찍어보는 점검용
 
 permissions:
   contents: write
@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 300
     concurrency:
-      group: watch-${{ github.event_name }}
+      group: watch-${{ github.event.schedule || 'manual' }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -29,8 +29,9 @@ jobs:
       - name: watch
         env:
           GH_TOKEN: ${{ github.token }}
-          WATCH_UNTIL: ${{ github.event.schedule == '50 23 * * 0-4' && '12:10' || '15:31' }}
-          WATCH_DEBUG: ${{ github.event_name == 'push' && '1' || '0' }}
+          WATCH_FROM: ${{ github.event.schedule == '45 23 * * 0-4' && '09:00' || '12:00' }}
+          WATCH_UNTIL: ${{ github.event.schedule == '45 23 * * 0-4' && '11:59' || '15:40' }}
+          WATCH_DEBUG: ${{ github.event_name == 'schedule' && '0' || '1' }}
         run: |
           git config user.name github-actions
           git config user.email github-actions@users.noreply.github.com

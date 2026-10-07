@@ -4,7 +4,7 @@ alerts.py 의 RULES 를 현재가로 매분 판정한다. 이평선은 장 시�
 어제까지의 합을 구해 두고, 오늘 값은 (어제까지 n-1개 종가 + 현재가) / n 으로 계산한다.
 새 조건이 충족되면 즉시 GitHub 이슈를 만들고 reports/alerts.json 을 커밋한다.
 
-사용: python screener/watch.py   (WATCH_UNTIL=HH:MM KST 까지, 기본 15:31)
+사용: python screener/watch.py   (WATCH_FROM~WATCH_UNTIL, KST, 기본 09:00~15:40)
 """
 import json
 import os
@@ -51,12 +51,15 @@ def quote(code):
             print(json.dumps(d, ensure_ascii=False))
         num = lambda k: float(str(d[k]).replace(",", ""))
         return {"price": num("closePrice"), "low": num("lowPrice"), "volume": num("accumulatedTradingVolume"),
-                "status": d.get("marketStatus"), "src": "naver"}
+                "status": d.get("marketSessionType"), "src": "naver"}
     except Exception as e:
         print(f"{now():%H:%M:%S} naver quote {code} failed: {e!r}", file=sys.stderr)
     try:
         import FinanceDataReader as fdr
-        b = fdr.DataReader(code, now().date().isoformat()).iloc[-1]
+        df = fdr.DataReader(code, now().date().isoformat())
+        if df.empty or df.index[-1].date() != now().date():
+            return None
+        b = df.iloc[-1]
         return {"price": float(b["Close"]), "low": float(b["Low"]), "volume": float(b["Volume"]),
                 "status": None, "src": "fdr"}
     except Exception as e:
@@ -79,40 +82,76 @@ def load_seen(date):
     return []
 
 
+def git(*args):
+    return subprocess.run(["git", *args], check=False).returncode == 0
+
+
+def sync():
+    """원격의 최신 alerts.json 을 받아온다 (다른 감시 작업이 남긴 알림 기록 반영)."""
+    if os.environ.get("GITHUB_ACTIONS"):
+        git("pull", "--rebase", "--autostash")
+
+
 def notify(hit):
     title = f"[타점] {hit['date']} {hit['name']} {hit['rule']}"
     body = (f"{hit['time']} 현재가 {hit['price']:,.0f} / 기준선 {hit['level']:,} / 거래량 20일평균 {hit['vol_x']}배\n"
             f"{hit['note']}\n\n장중 신호는 종가 확정 전입니다. 종가까지 기준선 위에서 버티는지 확인하세요.")
     owner = os.environ.get("GITHUB_REPOSITORY_OWNER")
     cmd = ["gh", "issue", "create", "--title", title, "--body", body] + (["--assignee", owner] if owner else [])
-    subprocess.run(cmd, check=False)
+    if not os.environ.get("GITHUB_ACTIONS"):
+        return True
+    return subprocess.run(cmd, check=False).returncode == 0
 
 
 def commit(date, triggers):
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps({"date": date, "triggers": triggers}, ensure_ascii=False, indent=1))
     if os.environ.get("GITHUB_ACTIONS"):
-        sh = lambda *a: subprocess.run(a, check=False)
-        sh("git", "add", str(OUT))
-        sh("git", "commit", "-m", f"alerts: {now():%F %H:%M}")
-        sh("git", "pull", "--rebase")
-        sh("git", "push")
+        git("add", str(OUT))
+        git("commit", "-m", f"alerts: {now():%F %H:%M}")
+        for attempt in range(3):
+            if git("pull", "--rebase", "-X", "theirs") and git("push"):
+                return
+            git("rebase", "--abort")
+            time.sleep(5 * (attempt + 1))
+        print("ERROR: alerts.json push failed 3 times", file=sys.stderr)
+
+
+def at(hhmm):
+    hh, mm = map(int, hhmm.split(":"))
+    return now().replace(hour=hh, minute=mm, second=0, microsecond=0)
 
 
 def main():
-    hh, mm = map(int, os.environ.get("WATCH_UNTIL", "15:31").split(":"))
-    until = now().replace(hour=hh, minute=mm, second=0, microsecond=0)
+    start = at(os.environ.get("WATCH_FROM", "09:00"))
+    until = at(os.environ.get("WATCH_UNTIL", "15:40"))
     date = now().date().isoformat()
     bases = {name: prepare(name) for name in RULES}
+    if not DEBUG and now() < start:
+        print(f"waiting until {start:%H:%M}")
+        time.sleep((start - now()).total_seconds())
+    sync()
     triggers = load_seen(date)
     seen = {(x["name"], x["rule"]) for x in triggers}
-    print(f"watching {list(RULES)} until {until:%H:%M}, already alerted today: {sorted(seen)}")
+    print(f"watching {list(RULES)} {start:%H:%M}-{until:%H:%M}, already alerted today: {sorted(seen)}")
 
+    # 장이 실제로 열렸는지(누적 거래량이 움직이는지) 확인한 뒤에만 판정한다. 휴장일이면 30분 뒤 종료.
+    baseline, live = None, DEBUG
     while DEBUG or now() < until:
+        quotes = {name: quote(bases[name]["code"]) for name in RULES}
+        volume = sum(q["volume"] for q in quotes.values() if q)
+        if not live:
+            if baseline is None:
+                baseline = volume
+            elif volume != baseline:
+                live = True
+                print(f"{now():%H:%M} market is live")
+            elif now() >= start + timedelta(minutes=30):
+                print("no trading activity for 30 minutes; market holiday? exiting")
+                return
         for name, rules in RULES.items():
-            base = bases[name]
-            q = quote(base["code"])
-            if not q:
+            base, q = bases[name], quotes[name]
+            if not q or not live:
                 continue
             t = row(base, q)
             if DEBUG:
@@ -122,17 +161,26 @@ def main():
             for rule, fn, col, note in rules:
                 if (name, rule) in seen or not fn(t):
                     continue
+                sync()  # 다른 감시 작업이 방금 알렸는지 다시 확인
+                remote = load_seen(date)
+                keys = {(x["name"], x["rule"]) for x in remote}
+                triggers = remote + [x for x in triggers if (x["name"], x["rule"]) not in keys]
+                seen |= {(x["name"], x["rule"]) for x in triggers}
+                if (name, rule) in seen:
+                    continue
                 hit = {"date": date, "time": f"{now():%H:%M}", "name": name, "code": base["code"], "rule": rule,
                        "price": q["price"], "level": round(t[col]), "vol_x": round(q["volume"] / base["vma20"], 1),
                        "note": note}
                 print("HIT", json.dumps(hit, ensure_ascii=False))
+                if not notify(hit):
+                    print("ERROR: issue create failed; retry next minute", file=sys.stderr)
+                    continue
                 seen.add((name, rule))
                 triggers.append(hit)
-                notify(hit)
                 commit(date, triggers)
         if DEBUG:
             return
-        time.sleep(max(0, 60 - now().second))
+        time.sleep(max(1, 60 - now().second))
     print(f"done at {now():%H:%M}, alerts today: {len(triggers)}")
 
 
