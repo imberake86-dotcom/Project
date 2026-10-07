@@ -3,43 +3,35 @@ name: dante-alerts
 on:
   push:
     branches: [claude/project-thread-13a1xl]
-    paths: [screener/alerts.py, .github/workflows/alerts.yml]
+    paths: [screener/watch.py, screener/alerts.py, .github/workflows/alerts.yml]
   schedule:
-    - cron: "7,37 0-6 * * 1-5"   # 09:07~15:37 KST, 30분 간격 (정각 혼잡 회피)
+    - cron: "50 23 * * 0-4"   # 08:50 KST 월~금, 오전 감시 (12:10까지)
+    - cron: "5 3 * * 1-5"     # 12:05 KST, 오후 감시 (오전 감시가 끝나면 이어서 15:31까지)
   workflow_dispatch:
 
 permissions:
   contents: write
   issues: write
 
-concurrency:
-  group: reports
-  cancel-in-progress: false
-
 jobs:
-  alerts:
+  watch:
     runs-on: ubuntu-latest
+    timeout-minutes: 300
+    concurrency:
+      group: watch-${{ github.event_name }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install finance-datareader pandas numpy requests
-      - run: python screener/alerts.py
-      - name: push new alerts as GitHub issues
+      - name: watch
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          jq -c '.[]' reports/new_alerts.json | while read -r a; do
-            title="[타점] $(jq -r '.name + " " + .rule' <<<"$a")"
-            body=$(jq -r '"현재가 \(.price) / 기준선 \(.level) / 거래량 20일평균 \(.vol_x)배\n\(.note)\n\n장중 신호는 종가 확정 전입니다. 종가까지 기준선 위에서 버티는지 확인하세요."' <<<"$a")
-            gh issue create --title "$title" --body "$body" --assignee "${{ github.repository_owner }}" || echo "issue create failed: $title"
-          done
-      - name: commit alerts
+          WATCH_UNTIL: ${{ github.event.schedule == '50 23 * * 0-4' && '12:10' || '15:31' }}
+          WATCH_DEBUG: ${{ github.event_name == 'push' && '1' || '0' }}
         run: |
           git config user.name github-actions
           git config user.email github-actions@users.noreply.github.com
-          git add reports/alerts.json
-          git commit -m "alerts: $(TZ=Asia/Seoul date +'%F %H:%M')" || exit 0
-          git pull --rebase
-          git push
+          python screener/watch.py
