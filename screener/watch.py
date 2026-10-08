@@ -94,8 +94,8 @@ def sync():
 
 def notify(hit):
     title = f"[타점] {hit['date']} {hit['name']} {hit['rule']}"
-    body = (f"{hit['time']} 현재가 {hit['price']:,.0f} / 기준선 {hit['level']:,} / 거래량 20일평균 {hit['vol_x']}배\n"
-            f"{hit['note']}\n\n장중 신호는 종가 확정 전입니다. 종가까지 기준선 위에서 버티는지 확인하세요.")
+    body = (f"{hit['time']} 현재가 {hit['price']:,.0f} / 오늘 저가 {hit['low']:,.0f} / 기준 {hit['level']:,} / "
+            f"거래량 20일평균 {hit['vol_x']}배\n{hit['note']}\n\n장중 신호라 종가 확정 전입니다. 종가로 다시 확인하세요.")
     owner = os.environ.get("GITHUB_REPOSITORY_OWNER")
     cmd = ["gh", "issue", "create", "--title", title, "--body", body] + (["--assignee", owner] if owner else [])
     if not os.environ.get("GITHUB_ACTIONS"):
@@ -169,7 +169,7 @@ def main():
                 if (name, rule) in seen:
                     continue
                 hit = {"date": date, "time": f"{now():%H:%M}", "name": name, "code": base["code"], "rule": rule,
-                       "price": q["price"], "level": level(t, col), "vol_x": round(q["volume"] / base["vma20"], 1),
+                       "price": q["price"], "low": q["low"], "level": level(t, col), "vol_x": round(q["volume"] / base["vma20"], 1),
                        "note": note}
                 print("HIT", json.dumps(hit, ensure_ascii=False))
                 if not notify(hit):
