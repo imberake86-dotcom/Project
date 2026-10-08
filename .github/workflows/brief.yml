@@ -1,0 +1,45 @@
+name: watchlist-brief
+
+# 관심종목(screener/watchlist.txt) 타점 브리핑 + 전 종목 스캔.
+# 결과 reports/brief/latest.json 의 message 를 프로젝트 루틴이 스레드에 올린다.
+on:
+  schedule:
+    - cron: "40 22 * * 0-4"  # 07:40 KST 월~금, 전일 정규장 종가 기준 (am)
+    - cron: "50 6 * * 1-5"   # 15:50 KST 월~금, 당일 정규장 종가 기준 (pm)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: am 또는 pm
+        default: pm
+
+permissions:
+  contents: write
+
+concurrency:
+  group: reports
+  cancel-in-progress: false
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MODE: ${{ github.event.inputs.mode || (github.event.schedule == '40 22 * * 0-4' && 'am' || 'pm') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install finance-datareader pandas numpy requests
+      - name: market-wide scan
+        continue-on-error: true
+        run: python screener/morning_scan.py
+      - run: python screener/brief.py "$MODE"
+      - name: commit result
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add reports/brief reports/morning
+          git commit -m "brief ($MODE): $(TZ=Asia/Seoul date +%F)" || exit 0
+          git pull --rebase
+          git push
