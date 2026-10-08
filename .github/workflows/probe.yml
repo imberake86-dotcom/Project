@@ -1,0 +1,21 @@
+name: probe
+
+# 종목 즉석 확인용. 커밋하지 않고 로그로만 남긴다.
+on:
+  workflow_dispatch:
+    inputs:
+      names:
+        description: "종목명 (공백으로 구분)"
+        required: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install finance-datareader pandas numpy requests
+      - run: python screener/probe.py ${{ inputs.names }}
