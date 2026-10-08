@@ -193,7 +193,8 @@ def market_picks(asof):
     rows = [(h, max(h["plans"], key=lambda p: p["rr"])) for h in hits if h.get("val20_eok", 0) >= 10]
     rows = [(h, p) for h, p in rows if p["rr"] >= MIN_RR]
     rows.sort(key=lambda x: -x[1]["rr"])
-    return [{"name": h["name"], "close": h["close"], "type": p["type"], "entry": p["entry"], "stop": p["stop"],
+    label = {"A": "5일선 회복", "B": "5·20·60 전환", "B2": "5·112·224 전환"}
+    return [{"name": h["name"], "close": h["close"], "type": label.get(p["type"], p["type"]), "entry": p["entry"], "stop": p["stop"],
              "target": p["target"], "rr": p["rr"]} for h, p in rows[:5]]
 
 
