@@ -18,4 +18,6 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install finance-datareader pandas numpy requests
-      - run: python screener/probe.py ${{ inputs.names }}
+      - env:
+          NAMES: ${{ inputs.names }}
+        run: python screener/probe.py $NAMES
