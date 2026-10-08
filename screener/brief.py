@@ -2,7 +2,8 @@
 
 screener/watchlist.txt 의 종목을 확정 일봉으로 판정해 단테 타점(진입/손절/1차 목표)만 뽑는다.
 - am (장 시작 전): 오늘 날짜 봉(넥스트레이드 프리마켓)은 버리고 어제 정규장 종가까지로 판정
-- pm (15:30 장 마감 뒤): 오늘 봉을 KRX 정규장 OHLCV 로 덮어쓰고 판정
+- pm (15:30 장 마감 뒤): 오늘 봉으로 판정
+두 경우 모두 마지막 봉은 네이버 실시간 시세의 KRX 정규장 OHLCV 로 덮어쓴다 (naver_regular).
 판정식:
   기준봉 지지 (R04)  최근 10봉 안의 기준봉(+7%↑, 거래량 20일평균 3배↑) 뒤 종가가 시가를 지키며 시가 근처로 눌림
   224 회복 눌림      10봉 안에 종가가 224선을 회복했고 지분(224선 위 면적) 60%↑, 224선 +6% 안쪽
@@ -52,15 +53,30 @@ def watchlist():
     return [x.split("#")[0].strip() for x in lines if x.split("#")[0].strip()]
 
 
+def naver_regular(code):
+    """네이버 실시간 시세의 KRX 정규장 OHLCV 와 그 거래일. 넥스트레이드 값(overMarketPriceInfo)은 쓰지 않는다.
+    네이버 일봉과 KRX 상장목록은 장 마감 직후에 각각 넥스트레이드 체결이 섞이거나 갱신이 늦어서 마지막 봉 교정에 이것을 쓴다."""
+    import requests
+    try:
+        d = requests.get(f"https://polling.finance.naver.com/api/realtime/domestic/stock/{code}", timeout=5).json()["datas"][0]
+        num = lambda k: float(str(d[k]).replace(",", ""))
+        day = datetime.fromisoformat(d["localTradedAt"]).date()
+        return day, {"Open": num("openPrice"), "High": num("highPrice"), "Low": num("lowPrice"),
+                     "Close": num("closePrice"), "Volume": num("accumulatedTradingVolume")}
+    except Exception as e:
+        print(f"naver quote {code} failed: {e!r}", file=sys.stderr)
+        return None, None
+
+
 def load(code, row, mode, today):
     df = fdr.DataReader(code, (today - timedelta(days=760)).isoformat())
     df = df[df["Volume"] > 0].copy()
     if mode == "am":
         df = df[df.index.date < today]
-    elif df.index[-1].date() == today and row is not None:
-        for k in ["Open", "High", "Low", "Close", "Volume"]:  # 넥스트레이드 체결이 섞이지 않게 정규장 값으로
-            v = pd.to_numeric(str(row.get(k, "")).replace(",", ""), errors="coerce")
-            if pd.notna(v) and v > 0:
+    day, q = naver_regular(code)
+    if q and q["Close"] > 0 and day == df.index[-1].date():
+        for k, v in q.items():
+            if v > 0:
                 df.iloc[-1, df.columns.get_loc(k)] = v
     for n in [5, 20, 60, 112, 224]:
         df[f"MA{n}"] = df["Close"].rolling(n).mean()

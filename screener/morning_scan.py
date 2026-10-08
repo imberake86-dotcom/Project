@@ -14,6 +14,8 @@ from pathlib import Path
 import FinanceDataReader as fdr
 import pandas as pd
 
+from brief import naver_regular
+
 ROOT = Path(__file__).resolve().parent.parent
 MIN_VALUE_20D = 10e8   # F1 20일 평균 거래대금 하한 (예시값, 단테 고정값 없음)
 MAX_CHG = 15.0         # F2 당일 등락률 상한 (추격 회피 R11)
@@ -71,10 +73,12 @@ def analyze(row, start):
     if PREOPEN:  # 장 시작 전에는 넥스트레이드 프리마켓으로 생긴 오늘 봉을 버리고 어제 봉 그대로 쓴다
         df = df[df.index.date < TODAY]
     asof = df.index[-1].date()
-    # 정규장 종가로 마지막 봉 교정
-    for k in ["Open", "High", "Low", "Close", "Volume"]:
-        if not PREOPEN and pd.notna(row.get(k)) and row[k] > 0:
-            df.iloc[-1, df.columns.get_loc(k)] = row[k]
+    # 정규장 값으로 마지막 봉 교정 (KRX 상장목록은 장 마감 직후 갱신이 늦어 네이버 실시간 정규장 시세를 쓴다)
+    day, q = naver_regular(code)
+    if q and q["Close"] > 0 and day == asof:
+        for k, v in q.items():
+            if v > 0:
+                df.iloc[-1, df.columns.get_loc(k)] = v
     c = df["Close"]
     for n in [5, 20, 60, 112, 224]:
         df[f"MA{n}"] = c.rolling(n).mean()
