@@ -1,0 +1,25 @@
+name: us_probe
+
+# 미국 종목 즉석 확인용. 이 브랜치 push 때 로그로만 찍는다.
+on:
+  push:
+    branches: [claude/project-thread-qv2we8]
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "티커 (공백 구분)"
+        required: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pandas requests
+      - env:
+          SYMBOLS: ${{ inputs.symbols || 'SLND' }}
+        run: python screener/us_probe.py $SYMBOLS
