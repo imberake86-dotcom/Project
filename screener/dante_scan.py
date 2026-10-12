@@ -37,8 +37,8 @@ def crossed_up(df, i, col):
     return df["Close"].iloc[i - 1] <= df[col].iloc[i - 1] and df["Close"].iloc[i] > df[col].iloc[i]
 
 
-def signals(df, i):
-    """i 번째 봉에서 새로 성립한 기법들 [(이름, 근거, 실패 기준)]."""
+def signals(df, i, px=lambda v: f"{v:,.0f}"):
+    """i 번째 봉에서 새로 성립한 기법들 [(이름, 근거, 실패 기준)]. px 는 가격 표기(미국 종목은 소수점)."""
     t, p = df.iloc[i], df.iloc[i - 1]
     vol_x = t["Volume"] / df["VMA20"].iloc[i - 1]
     has224 = pd.notna(t["MA224"])
@@ -49,26 +49,26 @@ def signals(df, i):
         two = ", ".join(x for x in [f"매집봉 {b['acc_n']}개" if b["acc_n"] else "",
                                     f"골파기 {len(b['gol'])}회" if b["gol"] else ""] if x) or "매집 흔적 약함"
         out.append(("밥그릇 3번", f"1번 {b['high_date'][2:7].replace('-', '.')} 고점 대비 {b['drop']}%, "
-                                 f"2번 바닥 후 {b['base_days']}일 횡보({two}), 3번 224선 {b['ma224']:,} {'재돌파' if b['re'] else '돌파'}",
-                    f"종가 224선 {b['ma224']:,} 이탈"))
+                                 f"2번 바닥 후 {b['base_days']}일 횡보({two}), 3번 224선 {px(t['MA224'])} {'재돌파' if b['re'] else '돌파'}",
+                    f"종가 224선 {px(t['MA224'])} 이탈"))
 
     strong = t["chg"] >= 2 and vol_x >= 1.5
     if has224 and crossed_up(df, i, "MA224"):
         on112 = int((df["Close"].iloc[i - 20:i] > df["MA112"].iloc[i - 20:i]).sum())
         if strong and on112 >= 10 and t["MA112"] < t["MA224"]:
-            out.append(("112·224", f"112선 위 {on112}/20일 지지 후 224선 {t['MA224']:,.0f} 돌파", f"종가 112선 {t['MA112']:,.0f} 이탈"))
+            out.append(("112·224", f"112선 위 {on112}/20일 지지 후 224선 {px(t['MA224'])} 돌파", f"종가 112선 {px(t['MA112'])} 이탈"))
         w = df.iloc[i - 223:i + 1]
         diff = (w["Close"] - w["MA224"]) / w["MA224"]
         buy, sell = diff.clip(lower=0).sum(), (-diff).clip(lower=0).sum()
         share = buy / (buy + sell) * 100 if buy + sell else 50
         if 35 <= share <= 65 and vol_x >= 1.2:
-            out.append(("지분", f"224선 회복, 매수 지분 {share:.0f}% : 매도 {100 - share:.0f}%", f"종가 224선 {t['MA224']:,.0f} 이탈"))
+            out.append(("지분", f"224선 회복, 매수 지분 {share:.0f}% : 매도 {100 - share:.0f}%", f"종가 224선 {px(t['MA224'])} 이탈"))
 
     if crossed_up(df, i, "MA60") and strong and t["Close"] > t["MA20"]:
         gc = ((df["MA5"] > df["MA20"]) & (df["MA5"].shift(1) <= df["MA20"].shift(1))).iloc[i - 20:i].any()
         zone = ((df["Close"] > df["MA20"]) & (df["Close"] < df["MA60"])).iloc[i - 10:i].sum()
         if gc and zone >= 3 and t["MA20"] < t["MA60"]:
-            out.append(("256", f"5/20 골든크로스 후 256 자리 {zone}일, 60선 {t['MA60']:,.0f} 돌파", f"종가 20선 {t['MA20']:,.0f} 이탈"))
+            out.append(("256", f"5/20 골든크로스 후 256 자리 {zone}일, 60선 {px(t['MA60'])} 돌파", f"종가 20선 {px(t['MA20'])} 이탈"))
 
     if has224 and i >= 62:
         past = df.iloc[i - 60]
@@ -76,8 +76,8 @@ def signals(df, i):
         spikes = int((df["Volume"].iloc[i - 40:i + 1] > 3 * df["VMA20"].shift(1).iloc[i - 40:i + 1]).sum())
         settle = t["Close"] > t["MA60"] and p["Close"] > p["MA60"] and df["Close"].iloc[i - 2] <= df["MA60"].iloc[i - 2]
         if rev and spikes and settle:
-            tgt = f"1차 목표 224선 {t['MA224']:,.0f}"
-            out.append(("역매공파", f"역배열 바닥에서 거래량 급증 {spikes}회 뒤 60선 위 안착 2일째, {tgt}", f"60선 {t['MA60']:,.0f} 이탈"))
+            tgt = f"1차 목표 224선 {px(t['MA224'])}"
+            out.append(("역매공파", f"역배열 바닥에서 거래량 급증 {spikes}회 뒤 60선 위 안착 2일째, {tgt}", f"60선 {px(t['MA60'])} 이탈"))
 
     pp = df.iloc[i - 2]
     odol = (p["Close"] < p["MA5"] and pp["Close"] < pp["MA5"] and t["Close"] > t["MA5"] and t["Close"] > t["Open"]
@@ -93,8 +93,8 @@ def signals(df, i):
                     spot = f"{n}선 지지"
                     break
         if spot:
-            out.append(("오돌이", f"{spot}에서 5선 {t['MA5']:,.0f} 회복 양봉, 거래량 전일 {t['Volume'] / p['Volume']:.1f}배",
-                        f"오늘 저가 {t['Low']:,.0f} 이탈"))
+            out.append(("오돌이", f"{spot}에서 5선 {px(t['MA5'])} 회복 양봉, 거래량 전일 {t['Volume'] / p['Volume']:.1f}배",
+                        f"오늘 저가 {px(t['Low'])} 이탈"))
     return out, round(float(vol_x), 1)
 
 

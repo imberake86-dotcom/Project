@@ -1,25 +1,36 @@
-name: us_probe
+name: us_scan
 
-# 미국 종목 즉석 확인용. 이 브랜치 push 때 로그로만 찍는다.
+# 미국 감시 종목 단테 판정. 이 브랜치에 push 하면 돈다(기본 브랜치가 아니라 schedule 불가).
+# 스레드 루틴이 평일 미국 장마감 뒤 reports/us/run.txt 를 갱신해 push → 결과 reports/us/latest.json 커밋.
 on:
   push:
     branches: [claude/project-thread-qv2we8]
-  workflow_dispatch:
-    inputs:
-      symbols:
-        description: "티커 (공백 구분)"
-        required: true
+    paths: ["reports/us/run.txt", "screener/us_*", "screener/dante_scan.py", ".github/workflows/us_probe.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: us-scan
+  cancel-in-progress: false
 
 jobs:
-  probe:
+  scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pandas requests
-      - env:
-          SYMBOLS: ${{ inputs.symbols || 'SLND' }}
-        run: python screener/us_probe.py $SYMBOLS
+      - run: pip install finance-datareader pandas numpy requests
+      - run: python screener/us_scan.py backtest 40 $(grep -v '^#' screener/us_watchlist.txt | cut -d'#' -f1)
+      - run: python screener/us_scan.py
+      - name: commit result
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add reports/us
+          git commit -m "us scan: $(TZ=Asia/Seoul date '+%F %H:%M')" || exit 0
+          git pull --rebase
+          git push
