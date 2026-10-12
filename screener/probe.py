@@ -3,6 +3,7 @@
 사용: python screener/probe.py 원일특강 [종목명 ...]   (Actions probe.yml 에서 workflow_dispatch 로 실행)
 """
 import json
+import re
 import sys
 
 import requests
@@ -22,7 +23,6 @@ def realtime(code):
 
 def news(code):
     """최근 뉴스·공시 제목 (네이버). 실패해도 계속 진행."""
-    import re
     for url in (f"https://m.stock.naver.com/api/news/stock/{code}?pageSize=15&page=1",
                 f"https://finance.naver.com/item/news_notice.naver?code={code}&page=1",
                 f"https://finance.naver.com/item/news_news.naver?code={code}&page=1"):
@@ -44,12 +44,23 @@ def news(code):
             print(f"failed: {e!r}")
 
 
+def krx_daily(code, count=5):
+    # 네이버 fchart 일봉: 정규장(KRX) 기준인지 넥스트레이드가 섞였는지 일봉 CSV와 대조하려고 원문을 그대로 찍는다.
+    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count={count}&requestType=0"
+    try:
+        print(url)
+        print("\n".join(re.findall(r'data="([^"]+)"', requests.get(url, timeout=5).text)))
+    except Exception as e:
+        print(f"failed: {e!r}")
+
+
 def main(names):
     for name in names:
         code = find_code(name)
         print(f"=== {name} {code}")
         realtime(code)
         news(code)
+        krx_daily(code)
         df = load_prices(code)
         cols = ["Open", "High", "Low", "Close", "Volume"] + [f"MA{n}" for n in MAS] + ["VMA20"]
         print(df[cols].tail(25).round(0).to_string())
