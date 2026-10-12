@@ -8,7 +8,7 @@ import sys
 
 import requests
 
-from dante import MAS, find_code, load_prices
+from dante import MAS, find_code, krx_listing, load_prices
 
 
 def realtime(code):
@@ -44,14 +44,13 @@ def news(code):
             print(f"failed: {e!r}")
 
 
-def krx_daily(code, count=5):
-    # 네이버 fchart 일봉: 정규장(KRX) 기준인지 넥스트레이드가 섞였는지 일봉 CSV와 대조하려고 원문을 그대로 찍는다.
-    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count={count}&requestType=0"
+def krx_close(code):
+    # KRX 상장목록 시세를 정규장 종가 대조용으로 찍는다. 네이버 일봉·fchart에는 넥스트레이드 시간외가 섞인다(10/8 오상 6,780 vs 6,560).
     try:
-        print(url)
-        print("\n".join(re.findall(r'data="([^"]+)"', requests.get(url, timeout=5).text)))
+        row = krx_listing().set_index("Code").loc[code]
+        print("KRX 정규장:", {k: row[k] for k in ("Open", "High", "Low", "Close", "Changes", "ChagesRatio", "Volume") if k in row})
     except Exception as e:
-        print(f"failed: {e!r}")
+        print(f"KRX listing failed: {e!r}")
 
 
 def main(names):
@@ -60,7 +59,7 @@ def main(names):
         print(f"=== {name} {code}")
         realtime(code)
         news(code)
-        krx_daily(code)
+        krx_close(code)
         df = load_prices(code)
         cols = ["Open", "High", "Low", "Close", "Volume"] + [f"MA{n}" for n in MAS] + ["VMA20"]
         print(df[cols].tail(25).round(0).to_string())
