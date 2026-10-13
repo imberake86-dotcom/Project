@@ -5,7 +5,6 @@
 import json
 import re
 import sys
-from datetime import date, timedelta
 
 import requests
 
@@ -17,7 +16,11 @@ def realtime(code):
                 f"https://m.stock.naver.com/api/stock/{code}/basic"):
         try:
             print(url)
-            print(json.dumps(requests.get(url, timeout=5).json(), ensure_ascii=False))
+            j = requests.get(url, timeout=5).json()
+            print(json.dumps(j, ensure_ascii=False))
+            d = (j.get("datas") or [j])[0]
+            num = lambda k: int(str(d.get(k, "0")).replace(",", ""))
+            print("전일 정규장 종가(기준가):", num("closePrice") - num("compareToPreviousClosePrice"))
         except Exception as e:
             print(f"failed: {e!r}")
 
@@ -48,14 +51,7 @@ def news(code):
 def krx_close(code):
     # 정규장 종가 대조용. 네이버 일봉·fchart에는 넥스트레이드 시간외가 섞인다(10/8 오상 6,780 vs 6,560).
     # StockListing("KRX")는 FinanceData 깃허브 캐시 CSV라 장중 스냅샷일 수 있다(10/12 20:52에 그린 2,360, 실제 2,305).
-    # 그래서 KRX 정보데이터시스템 개별종목 시세를 직접 먼저 읽는다.
-    import FinanceDataReader as fdr
-    try:
-        df = fdr.DataReader(f"KRX:{code}", (date.today() - timedelta(days=10)).isoformat())
-        print("KRX 직접 일별 시세:")
-        print(df.tail(3).to_string())
-    except Exception as e:
-        print(f"KRX direct failed: {e!r}")
+    # 확실한 전일 정규장 종가는 다음 날 네이버 실시간의 closePrice - compareToPreviousClosePrice(기준가)로 본다.
     try:
         row = krx_listing().set_index("Code").loc[code]
         print("KRX 상장목록 캐시(스냅샷일 수 있음):", {k: row[k] for k in ("Open", "High", "Low", "Close", "Changes", "ChagesRatio", "Volume") if k in row})
