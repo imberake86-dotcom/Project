@@ -5,6 +5,7 @@
 import json
 import re
 import sys
+from datetime import date, timedelta
 
 import requests
 
@@ -45,10 +46,19 @@ def news(code):
 
 
 def krx_close(code):
-    # KRX 상장목록 시세를 정규장 종가 대조용으로 찍는다. 네이버 일봉·fchart에는 넥스트레이드 시간외가 섞인다(10/8 오상 6,780 vs 6,560).
+    # 정규장 종가 대조용. 네이버 일봉·fchart에는 넥스트레이드 시간외가 섞인다(10/8 오상 6,780 vs 6,560).
+    # StockListing("KRX")는 FinanceData 깃허브 캐시 CSV라 장중 스냅샷일 수 있다(10/12 20:52에 그린 2,360, 실제 2,305).
+    # 그래서 KRX 정보데이터시스템 개별종목 시세를 직접 먼저 읽는다.
+    import FinanceDataReader as fdr
+    try:
+        df = fdr.DataReader(f"KRX:{code}", (date.today() - timedelta(days=10)).isoformat())
+        print("KRX 직접 일별 시세:")
+        print(df.tail(3).to_string())
+    except Exception as e:
+        print(f"KRX direct failed: {e!r}")
     try:
         row = krx_listing().set_index("Code").loc[code]
-        print("KRX 정규장:", {k: row[k] for k in ("Open", "High", "Low", "Close", "Changes", "ChagesRatio", "Volume") if k in row})
+        print("KRX 상장목록 캐시(스냅샷일 수 있음):", {k: row[k] for k in ("Open", "High", "Low", "Close", "Changes", "ChagesRatio", "Volume") if k in row})
     except Exception as e:
         print(f"KRX listing failed: {e!r}")
 
