@@ -48,6 +48,18 @@ def news(code):
             print(f"failed: {e!r}")
 
 
+def naver_daily(code):
+    # 네이버 일별 시세(모바일 API)가 정규장 종가인지 통합 종가인지 대조용으로 원문을 찍는다.
+    for url in (f"https://m.stock.naver.com/api/stock/{code}/price?pageSize=3&page=1",
+                f"https://m.stock.naver.com/api/stock/{code}/integration"):
+        try:
+            r = requests.get(url, timeout=5, headers={"User-Agent": "Mozilla/5.0"})
+            print(url, r.status_code)
+            print(r.text[:3000])
+        except Exception as e:
+            print(f"failed: {e!r}")
+
+
 def krx_close(code):
     # 정규장 종가 대조용. 네이버 일봉·fchart에는 넥스트레이드 시간외가 섞인다(10/8 오상 6,780 vs 6,560).
     # StockListing("KRX")는 FinanceData 깃허브 캐시 CSV라 장중 스냅샷일 수 있다(10/12 20:52에 그린 2,360, 실제 2,305).
@@ -66,6 +78,7 @@ def main(names):
         realtime(code)
         news(code)
         krx_close(code)
+        naver_daily(code)
         df = load_prices(code)
         cols = ["Open", "High", "Low", "Close", "Volume"] + [f"MA{n}" for n in MAS] + ["VMA20"]
         print(df[cols].tail(25).round(0).to_string())
