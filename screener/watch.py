@@ -16,10 +16,11 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from alerts import RULES, level
-from dante import MAS, ROOT, find_code, load_prices
+from dante import MAS, ROOT, WATCHLIST, find_code, load_prices
 
 KST = timezone(timedelta(hours=9))
 OUT = ROOT / "reports" / "alerts.json"
+CLOSE_OUT = ROOT / "reports" / "close_krx.json"
 DEBUG = os.environ.get("WATCH_DEBUG") == "1"  # 시간 제한 없이 한 바퀴 돌며 원시 시세를 출력, 알림·커밋 안 함
 
 
@@ -50,8 +51,9 @@ def quote(code):
         if DEBUG:
             print(json.dumps(d, ensure_ascii=False))
         num = lambda k: float(str(d[k]).replace(",", ""))
-        return {"price": num("closePrice"), "low": num("lowPrice"), "volume": num("accumulatedTradingVolume"),
-                "status": d.get("marketSessionType"), "src": "naver"}
+        return {"price": num("closePrice"), "open": num("openPrice"), "high": num("highPrice"), "low": num("lowPrice"),
+                "volume": num("accumulatedTradingVolume"), "base": num("closePrice") - num("compareToPreviousClosePrice"),
+                "traded": d.get("localTradedAt"), "status": d.get("marketSessionType"), "src": "naver"}
     except Exception as e:
         print(f"{now():%H:%M:%S} naver quote {code} failed: {e!r}", file=sys.stderr)
     try:
@@ -117,6 +119,27 @@ def commit(date, triggers):
         print("ERROR: alerts.json push failed 3 times", file=sys.stderr)
 
 
+def save_closes(date):
+    """15:31 시세를 정규장 종가로 남긴다. 저녁 일봉·네이버 종가에는 넥스트레이드 시간외가 섞이고
+    KRX 상장목록 캐시는 장중 스냅샷일 수 있어서다. traded(마지막 체결 시각)가 15:30 직후면 KRX 종가 단일가다."""
+    closes = {}
+    for name in WATCHLIST:
+        code = find_code(name)
+        q = quote(code) if code else None
+        if q:
+            closes[name] = {k: q.get(k) for k in ("price", "open", "high", "low", "volume", "base", "traded", "status")}
+    CLOSE_OUT.write_text(json.dumps({"date": date, "time": f"{now():%H:%M:%S}", "closes": closes}, ensure_ascii=False, indent=1))
+    print("closes", json.dumps(closes, ensure_ascii=False))
+    if os.environ.get("GITHUB_ACTIONS"):
+        git("add", str(CLOSE_OUT))
+        git("commit", "-m", f"close: {date} 정규장 종가")
+        for attempt in range(3):
+            if git("pull", "--rebase", "-X", "theirs") and git("push"):
+                return
+            git("rebase", "--abort")
+            time.sleep(5 * (attempt + 1))
+
+
 def at(hhmm):
     hh, mm = map(int, hhmm.split(":"))
     return now().replace(hour=hh, minute=mm, second=0, microsecond=0)
@@ -136,8 +159,11 @@ def main():
     print(f"watching {list(RULES)} {start:%H:%M}-{until:%H:%M}, already alerted today: {sorted(seen)}")
 
     # 장이 실제로 열렸는지(누적 거래량이 움직이는지) 확인한 뒤에만 판정한다. 휴장일이면 30분 뒤 종료.
-    baseline, live = None, DEBUG
+    baseline, live, closed = None, DEBUG, False
     while DEBUG or now() < until:
+        if live and not DEBUG and not closed and now() >= at("15:31"):
+            save_closes(date)
+            closed = True
         quotes = {name: quote(bases[name]["code"]) for name in RULES}
         volume = sum(q["volume"] for q in quotes.values() if q)
         if not live:
