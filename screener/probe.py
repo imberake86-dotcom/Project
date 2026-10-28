@@ -74,7 +74,7 @@ def krx_close(code):
 
 def main(names):
     for name in names:
-        code = find_code(name)
+        code = name if name.isdigit() and len(name) == 6 else find_code(name)
         print(f"=== {name} {code}")
         realtime(code)
         news(code)
