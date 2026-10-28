@@ -20,4 +20,5 @@ jobs:
       - run: pip install finance-datareader pandas numpy requests
       - env:
           NAMES: ${{ inputs.names }}
+          PROBE_ROWS: "520"
         run: python screener/probe.py $NAMES

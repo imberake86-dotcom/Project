@@ -3,6 +3,7 @@
 사용: python screener/probe.py 원일특강 [종목명 ...]   (Actions probe.yml 에서 workflow_dispatch 로 실행)
 """
 import json
+import os
 import re
 import sys
 
@@ -81,7 +82,7 @@ def main(names):
         naver_daily(code)
         df = load_prices(code)
         cols = ["Open", "High", "Low", "Close", "Volume"] + [f"MA{n}" for n in MAS] + ["VMA20"]
-        print(df[cols].tail(25).round(0).to_string())
+        print(df[cols].tail(int(os.environ.get("PROBE_ROWS", "25"))).round(0).to_string())
 
 
 if __name__ == "__main__":
