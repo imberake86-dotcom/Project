@@ -8,6 +8,10 @@ on:
     - cron: "45 23 * * 0-4"   # 08:45 KST 월~금 시작, 09:00~11:59 감시
     - cron: "45 2 * * 1-5"    # 11:45 KST 시작, 12:00~15:40 감시 (종가 확정까지)
   workflow_dispatch:          # 수동 실행·push 는 시세를 한 번만 찍어보는 점검용
+    inputs:
+      session:                # 스케줄 실행이 밀리거나 빠진 날 am/pm 으로 같은 감시를 대신 돌린다
+        description: "check: 한 번 점검 / am: 09:00~11:59 감시 / pm: 12:00~15:40 감시"
+        default: check
 
 permissions:
   contents: write
@@ -18,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 300
     concurrency:
-      group: watch-${{ github.event.schedule || 'manual' }}
+      group: watch-${{ (github.event.schedule == '45 23 * * 0-4' || inputs.session == 'am') && 'am' || ((github.event.schedule == '45 2 * * 1-5' || inputs.session == 'pm') && 'pm' || 'manual') }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -29,9 +33,9 @@ jobs:
       - name: watch
         env:
           GH_TOKEN: ${{ github.token }}
-          WATCH_FROM: ${{ github.event.schedule == '45 23 * * 0-4' && '09:00' || '12:00' }}
-          WATCH_UNTIL: ${{ github.event.schedule == '45 23 * * 0-4' && '11:59' || '15:40' }}
-          WATCH_DEBUG: ${{ github.event_name == 'schedule' && '0' || '1' }}
+          WATCH_FROM: ${{ (github.event.schedule == '45 23 * * 0-4' || inputs.session == 'am') && '09:00' || '12:00' }}
+          WATCH_UNTIL: ${{ (github.event.schedule == '45 23 * * 0-4' || inputs.session == 'am') && '11:59' || '15:40' }}
+          WATCH_DEBUG: ${{ (github.event_name == 'schedule' || inputs.session == 'am' || inputs.session == 'pm') && '0' || '1' }}
         run: |
           git config user.name github-actions
           git config user.email github-actions@users.noreply.github.com
