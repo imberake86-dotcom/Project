@@ -160,6 +160,7 @@ def main():
 
     # 장이 실제로 열렸는지(누적 거래량이 움직이는지) 확인한 뒤에만 판정한다. 휴장일이면 30분 뒤 종료.
     baseline, live, closed = None, DEBUG, False
+    began = max(start, now())  # 늦게 시작한 날에도 휴장 판정은 실제로 30분을 지켜본 뒤에 한다
     while DEBUG or now() < until:
         if live and not DEBUG and not closed and now() >= at("15:31"):
             save_closes(date)
@@ -172,7 +173,7 @@ def main():
             elif volume != baseline:
                 live = True
                 print(f"{now():%H:%M} market is live")
-            elif now() >= start + timedelta(minutes=30):
+            elif now() >= began + timedelta(minutes=30):
                 print("no trading activity for 30 minutes; market holiday? exiting")
                 return
         for name, rules in RULES.items():
