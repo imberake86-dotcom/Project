@@ -12,6 +12,14 @@ on:
       session:                # 스케줄 실행이 밀리거나 빠진 날 am/pm 으로 같은 감시를 대신 돌린다
         description: "check: 한 번 점검 / am: 09:00~11:59 감시 / pm: 12:00~15:40 감시"
         default: check
+      until:                  # 수능일처럼 장이 늦게 끝나는 날 감시 종료 시각 (예: 16:40). 비우면 기본값
+        description: "감시 종료 시각 HH:MM (비우면 am 11:59 / pm 15:40)"
+        required: false
+        default: ""
+      close_at:               # 종가 저장 시각 (예: 수능일 16:31). 비우면 15:31
+        description: "정규장 종가 저장 시각 HH:MM (비우면 15:31)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -34,7 +42,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           WATCH_FROM: ${{ (github.event.schedule == '45 23 * * 0-4' || inputs.session == 'am') && '09:00' || '12:00' }}
-          WATCH_UNTIL: ${{ (github.event.schedule == '45 23 * * 0-4' || inputs.session == 'am') && '11:59' || '15:40' }}
+          WATCH_UNTIL: ${{ inputs.until || ((github.event.schedule == '45 23 * * 0-4' || inputs.session == 'am') && '11:59' || '15:40') }}
+          CLOSE_AT: ${{ inputs.close_at || '15:31' }}
           WATCH_DEBUG: ${{ (github.event_name == 'schedule' || inputs.session == 'am' || inputs.session == 'pm') && '0' || '1' }}
         run: |
           git config user.name github-actions

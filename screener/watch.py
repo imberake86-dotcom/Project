@@ -162,7 +162,7 @@ def main():
     baseline, live, closed = None, DEBUG, False
     began = max(start, now())  # 늦게 시작한 날에도 휴장 판정은 실제로 30분을 지켜본 뒤에 한다
     while DEBUG or now() < until:
-        if live and not DEBUG and not closed and now() >= at("15:31"):
+        if live and not DEBUG and not closed and now() >= at(os.environ.get("CLOSE_AT") or "15:31"):
             save_closes(date)
             closed = True
         quotes = {name: quote(bases[name]["code"]) for name in RULES}
