@@ -1,0 +1,21 @@
+name: security-scan
+on:
+  push:
+    branches: [claude/project-thread-qrn870]
+    paths: [screener/security_scan.py, .github/workflows/security.yml]
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install finance-datareader pandas numpy requests
+      - working-directory: screener
+        run: >
+          python security_scan.py 6 안랩 지니언스 파수 라온시큐어 드림시큐리티 이글루 SGA솔루션즈 시큐브 한컴위드 모니터랩
+          샌즈랩 싸이버원 수산아이앤티 엑스게이트 케이사인 아톤 소프트캠프 휴네시온 윈스 시큐레터 노르마 플랜티넷
+          정원엔시스 슈프리마 슈프리마에이치큐 한국전자인증 이니텍 케이씨에스 에스에스알 한싹 이스트소프트 아이씨티케이
+          시큐센 코나아이 나이스평가정보 SCI평가정보 한국정보인증 민앤지 인포뱅크 다날 이씨에스 에스넷 롯데이노베이트 씨엔에이치
