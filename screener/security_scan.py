@@ -23,8 +23,9 @@ for n in NAMES:
     code = r["Code"].iloc[0]
     try:
         df = load(code, "pm", today)
+        assert len(df) > 30, "short"
     except Exception as e:
-        print("FAIL", n, e)
+        print("FAIL", n, repr(e))
         continue
     i = len(df) - 1
     t = df.iloc[i]
@@ -33,8 +34,11 @@ for n in NAMES:
            "val20_eok": round(float((df["Close"] * df["Volume"]).iloc[-20:].mean()) / 1e8),
            "ma": {k: (None if pd.isna(t[f"MA{k}"]) else round(float(t[f"MA{k}"]))) for k in [5, 20, 60, 112, 224]},
            "low": int(t["Low"]), "sig": []}
-    for j in range(i - N + 1, i + 1):
-        s, vx = signals(df, j)
+    for j in range(max(230, i - N + 1), i + 1):
+        try:
+            s, vx = signals(df, j)
+        except Exception as e:
+            print("SIGFAIL", n, repr(e)); break
         for a, b, c in s:
             rec["sig"].append([str(df.index[j].date()), a, b, c, vx, int(df["Close"].iloc[j]), int(df["Low"].iloc[j])])
     out.append(rec)
